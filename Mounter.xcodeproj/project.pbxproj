@@ -384,6 +384,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MounterFileProvider;
+				INFOPLIST_KEY_NSExtensionFileProviderSupportsEnumeration = YES;
 				INFOPLIST_KEY_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).FileProviderExtension";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -408,6 +409,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MounterFileProvider;
+				INFOPLIST_KEY_NSExtensionFileProviderSupportsEnumeration = YES;
 				INFOPLIST_KEY_NSExtensionPrincipalClass = "$(PRODUCT_MODULE_NAME).FileProviderExtension";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

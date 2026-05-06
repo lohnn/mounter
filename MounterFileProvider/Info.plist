@@ -6,6 +6,8 @@
 	<dict>
 		<key>NSExtensionFileProviderDocumentGroup</key>
 		<string>group.se.skandia.mounter</string>
+		<key>NSExtensionFileProviderSupportsEnumeration</key>
+		<true/>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.fileprovider-nonui</string>
 		<key>NSExtensionPrincipalClass</key>
