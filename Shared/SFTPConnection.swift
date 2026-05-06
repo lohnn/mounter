@@ -49,27 +49,29 @@ public actor SFTPConnection {
         guard !isConnected else { throw SFTPError.alreadyConnected }
 
         do {
-            let authMethod: SSHAuthenticationMethod
+            let authMethod: @Sendable () -> SSHAuthenticationMethod
+            let username = config.username
 
             switch config.authMethod {
             case .password:
                 guard let pw = password, !pw.isEmpty else {
                     throw SFTPError.connectionFailed("Password auth requested but no password provided")
                 }
-                authMethod = .passwordBased(username: config.username, password: pw)
+                authMethod = { .passwordBased(username: username, password: pw) }
 
             case .sshKey:
                 let keyPath = config.keyPath ?? "~/.ssh/id_rsa"
                 let expandedPath = NSString(string: keyPath).expandingTildeInPath
                 let keyData = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
-                let privateKey = String(data: keyData, encoding: .utf8) ?? ""
-                let rsaKey = try Insecure.RSA.PrivateKey(sshRsa: privateKey)
-                authMethod = .rsa(username: config.username, privateKey: rsaKey)
+                let privateKeyStr = String(data: keyData, encoding: .utf8) ?? ""
+                let rsaKey = try Insecure.RSA.PrivateKey(sshRsa: privateKeyStr)
+                authMethod = { .rsa(username: username, privateKey: rsaKey) }
             }
 
             let settings = SSHClientSettings(
-                host: "\(config.host):\(config.port)",
-                authenticationMethod: { authMethod },
+                host: config.host,
+                port: config.port,
+                authenticationMethod: authMethod,
                 hostKeyValidator: .acceptAnything()
             )
             let sshClient = try await SSHClient.connect(to: settings)
@@ -90,15 +92,11 @@ public actor SFTPConnection {
 
     public func disconnect() async {
         guard isConnected else { return }
+        try? await sftpClient?.close()
         try? await client?.close()
         client = nil
         sftpClient = nil
         isConnected = false
-    }
-
-    public func reconnect() async throws {
-        await disconnect()
-        try await connect()
     }
 
     // MARK: - Operations
@@ -108,29 +106,35 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let entries = try await sftp.listDirectory(atPath: path)
+            let names = try await sftp.listDirectory(atPath: path)
 
-            return entries.compactMap { entry -> SFTPFile? in
-                let name = entry.filename
-                guard name != "." && name != ".." else { return nil }
+            // listDirectory returns [SFTPMessage.Name], each has .components: [SFTPPathComponent]
+            return names.flatMap { name in
+                name.components.compactMap { component -> SFTPFile? in
+                    let filename = component.filename
+                    guard filename != "." && filename != ".." else { return nil }
 
-                let isDir = entry.attributes.type == .directory
-                let size = entry.attributes.size ?? 0
-                let modDate: Date? = entry.attributes.modificationDate
-                let perms = entry.attributes.permissions.map { formatPermissions($0, isDirectory: isDir) } ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
+                    let attrs = component.attributes
+                    let isDir = attrs.permissions.map { ($0 & 0o40000) != 0 } ?? false
+                    let size = attrs.size ?? 0
+                    let modDate = attrs.accessModificationTime?.modificationTime
 
-                let fullPath = path.hasSuffix("/")
-                    ? path + name
-                    : path + "/" + name
+                    let fullPath = path.hasSuffix("/")
+                        ? path + filename
+                        : path + "/" + filename
 
-                return SFTPFile(
-                    name: name,
-                    path: fullPath,
-                    size: size,
-                    isDirectory: isDir,
-                    modificationDate: modDate,
-                    permissions: perms
-                )
+                    let perms = attrs.permissions.map { formatPermissions($0, isDirectory: isDir) }
+                        ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
+
+                    return SFTPFile(
+                        name: filename,
+                        path: fullPath,
+                        size: size,
+                        isDirectory: isDir,
+                        modificationDate: modDate,
+                        permissions: perms
+                    )
+                }
             }
         } catch {
             throw mapSFTPError(error, path: path)
@@ -150,10 +154,11 @@ public actor SFTPConnection {
                 name = path
             }
 
-            let isDir = attributes.type == .directory
+            let isDir = attributes.permissions.map { ($0 & 0o40000) != 0 } ?? false
             let size = attributes.size ?? 0
-            let modDate: Date? = attributes.modificationDate
-            let perms = attributes.permissions.map { formatPermissions($0, isDirectory: isDir) } ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
+            let modDate = attributes.accessModificationTime?.modificationTime
+            let perms = attributes.permissions.map { formatPermissions($0, isDirectory: isDir) }
+                ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
 
             return SFTPFile(
                 name: name,
@@ -173,10 +178,11 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let data = try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+            let buffer = try await sftp.withFile(filePath: remotePath, flags: .read) { file in
                 try await file.readAll()
             }
-            try Data(buffer: data).write(to: URL(fileURLWithPath: localPath))
+            let data = Data(buffer: buffer, byteTransferStrategy: .noCopy)
+            try data.write(to: URL(fileURLWithPath: localPath))
         } catch {
             throw mapSFTPError(error, path: remotePath)
         }
@@ -190,7 +196,7 @@ public actor SFTPConnection {
             let buffer = try await sftp.withFile(filePath: remotePath, flags: .read) { file in
                 try await file.readAll()
             }
-            return Data(buffer: buffer)
+            return Data(buffer: buffer, byteTransferStrategy: .noCopy)
         } catch {
             throw mapSFTPError(error, path: remotePath)
         }
@@ -201,8 +207,8 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            try await sftp.withFile(filePath: remotePath, flags: [.write, .forceCreate]) { file in
-                var buffer = ByteBuffer(data: localData)
+            let buffer = ByteBuffer(data: localData)
+            try await sftp.withFile(filePath: remotePath, flags: [.write, .create, .truncate]) { file in
                 try await file.write(buffer, at: 0)
             }
         } catch {
@@ -243,9 +249,9 @@ public actor SFTPConnection {
 
         do {
             if isDirectory {
-                try await sftp.removeDirectory(atPath: path)
+                try await sftp.rmdir(at: path)
             } else {
-                try await sftp.removeFile(atPath: path)
+                try await sftp.remove(at: path)
             }
         } catch {
             throw mapSFTPError(error, path: path)
@@ -262,7 +268,7 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            try await sftp.rename(oldPath: oldPath, newPath: newPath)
+            try await sftp.rename(at: oldPath, to: newPath)
         } catch {
             throw mapSFTPError(error, path: oldPath)
         }
