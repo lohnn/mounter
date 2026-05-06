@@ -65,7 +65,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                     }
                     let conn = try await getConnection()
                     let file = try await conn.stat(path)
-                    item = FileProviderItem(file: file)
+                    item = FileProviderItem(file: file, remotePath: config?.remotePath ?? "/")
                 }
                 progress.completedUnitCount = 1
                 completionHandler(item, nil)
@@ -97,7 +97,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
                 try await conn.readFile(remotePath, to: localURL.path)
 
-                let item = FileProviderItem(file: file)
+                let item = FileProviderItem(file: file, remotePath: config?.remotePath ?? "/")
                 progress.completedUnitCount = 1
                 completionHandler(localURL, item, nil)
             } catch {
@@ -120,7 +120,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
                 let parentPath: String
                 if itemTemplate.parentItemIdentifier == .rootContainer {
-                    parentPath = "/"
+                    parentPath = config?.remotePath ?? "/"
                 } else {
                     guard let p = FileProviderItem.path(fromIdentifier: itemTemplate.parentItemIdentifier) else {
                         throw NSFileProviderError(.noSuchItem)
@@ -137,7 +137,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 }
 
                 let file = try await conn.stat(remotePath)
-                let item = FileProviderItem(file: file)
+                let item = FileProviderItem(file: file, remotePath: config?.remotePath ?? "/")
                 progress.completedUnitCount = 1
                 completionHandler(item, [], false, nil)
             } catch {
@@ -167,7 +167,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 if changedFields.contains(.filename) || changedFields.contains(.parentItemIdentifier) {
                     let newParent: String
                     if item.parentItemIdentifier == .rootContainer {
-                        newParent = "/"
+                        newParent = config?.remotePath ?? "/"
                     } else {
                         guard let p = FileProviderItem.path(fromIdentifier: item.parentItemIdentifier) else {
                             throw NSFileProviderError(.noSuchItem)
@@ -187,7 +187,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
                 }
 
                 let file = try await conn.stat(remotePath)
-                let updatedItem = FileProviderItem(file: file)
+                let updatedItem = FileProviderItem(file: file, remotePath: config?.remotePath ?? "/")
                 progress.completedUnitCount = 1
                 completionHandler(updatedItem, [], false, nil)
             } catch {
@@ -230,12 +230,13 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
 
     func enumerator(for containerItemIdentifier: NSFileProviderItemIdentifier,
                     request: NSFileProviderRequest) throws -> NSFileProviderEnumerator {
+        let rootPath = config?.remotePath ?? "/"
         let path: String
         if containerItemIdentifier == .rootContainer {
-            path = "/"
+            path = rootPath
         } else if containerItemIdentifier == .workingSet {
             // Working set — return root enumerator for simplicity
-            path = "/"
+            path = rootPath
         } else {
             guard let p = FileProviderItem.path(fromIdentifier: containerItemIdentifier) else {
                 throw NSFileProviderError(.noSuchItem)
@@ -252,9 +253,9 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             self.connection = conn
             let password = KeychainHelper.load(account: config.id.uuidString)
             Task { try await conn.connect(password: password) }
-            return FileProviderEnumerator(path: path, connection: conn, password: password)
+            return FileProviderEnumerator(path: path, connection: conn, password: password, remotePath: rootPath)
         }
 
-        return FileProviderEnumerator(path: path, connection: conn)
+        return FileProviderEnumerator(path: path, connection: conn, remotePath: rootPath)
     }
 }

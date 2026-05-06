@@ -6,11 +6,13 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     private let path: String
     private let connection: SFTPConnection
     private let password: String?
+    private let remotePath: String
 
-    init(path: String, connection: SFTPConnection, password: String? = nil) {
+    init(path: String, connection: SFTPConnection, password: String? = nil, remotePath: String = "/") {
         self.path = path
         self.connection = connection
         self.password = password
+        self.remotePath = remotePath
     }
 
     func invalidate() {
@@ -22,7 +24,7 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
             do {
                 try await connection.ensureConnected(password: password)
                 let files = try await connection.listDirectory(path)
-                let items = files.map { FileProviderItem(file: $0) }
+                let items = files.map { FileProviderItem(file: $0, remotePath: self.remotePath) }
                 observer.didEnumerate(items)
                 observer.finishEnumerating(upTo: nil)
             } catch {

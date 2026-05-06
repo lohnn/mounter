@@ -6,15 +6,18 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 
     private let file: SFTPFile
     private let isRoot: Bool
+    private let remotePath: String
 
-    init(file: SFTPFile) {
+    init(file: SFTPFile, remotePath: String = "/") {
         self.file = file
         self.isRoot = false
+        self.remotePath = remotePath
     }
 
     private override init() {
         self.file = SFTPFile(name: "/", path: "/", size: 0, isDirectory: true, modificationDate: nil, permissions: "drwxr-xr-x")
         self.isRoot = true
+        self.remotePath = "/"
     }
 
     static let root = FileProviderItem()
@@ -33,7 +36,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
             return .rootContainer
         }
         let parent = (file.path as NSString).deletingLastPathComponent
-        if parent == "/" || parent.isEmpty {
+        if parent == remotePath || parent == "/" || parent.isEmpty {
             return .rootContainer
         }
         return Self.identifier(forPath: parent)

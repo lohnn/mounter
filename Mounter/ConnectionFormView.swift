@@ -18,6 +18,7 @@ struct ConnectionFormView: View {
     @State private var authMethod: ConnectionConfig.AuthMethod = .password
     @State private var password = ""
     @State private var keyPath = ""
+    @State private var remotePath = "/"
     @State private var isTesting = false
     @State private var testResult: String?
 
@@ -31,6 +32,7 @@ struct ConnectionFormView: View {
             _username = State(initialValue: config.username)
             _authMethod = State(initialValue: config.authMethod)
             _keyPath = State(initialValue: config.keyPath ?? "")
+            _remotePath = State(initialValue: config.remotePath)
         }
     }
 
@@ -42,6 +44,11 @@ struct ConnectionFormView: View {
                     TextField("Host", text: $host)
                     TextField("Port", value: $port, format: .number)
                     TextField("Username", text: $username)
+                }
+
+                Section("Remote") {
+                    TextField("Remote Path", text: $remotePath)
+                        .textFieldStyle(.roundedBorder)
                 }
 
                 Section("Authentication") {
@@ -103,7 +110,8 @@ struct ConnectionFormView: View {
             port: port,
             username: username,
             authMethod: authMethod,
-            keyPath: authMethod == .sshKey ? keyPath : nil
+            keyPath: authMethod == .sshKey ? keyPath : nil,
+            remotePath: remotePath.isEmpty ? "/" : remotePath
         )
         if case .edit(let existing) = mode {
             config.id = existing.id
@@ -138,7 +146,8 @@ struct ConnectionFormView: View {
             port: port,
             username: username,
             authMethod: authMethod,
-            keyPath: authMethod == .sshKey ? keyPath : nil
+            keyPath: authMethod == .sshKey ? keyPath : nil,
+            remotePath: remotePath.isEmpty ? "/" : remotePath
         )
 
         // Save password temporarily for the test if provided
