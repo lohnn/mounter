@@ -1,5 +1,6 @@
 import Foundation
 import Citadel
+import NIOCore
 
 // MARK: - Errors
 
@@ -62,18 +63,16 @@ public actor SFTPConnection {
                 let expandedPath = NSString(string: keyPath).expandingTildeInPath
                 let keyData = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
                 let privateKey = String(data: keyData, encoding: .utf8) ?? ""
-                authMethod = .privateKey(
-                    username: config.username,
-                    privateKey: .init(sshRsa: privateKey)
-                )
+                let rsaKey = try Insecure.RSA.PrivateKey(sshRsa: privateKey)
+                authMethod = .rsa(username: config.username, privateKey: rsaKey)
             }
 
-            let sshClient = try await SSHClient.connect(
-                host: config.host,
-                port: config.port,
-                authenticationMethod: authMethod,
+            let settings = SSHClientSettings(
+                host: "\(config.host):\(config.port)",
+                authenticationMethod: { authMethod },
                 hostKeyValidator: .acceptAnything()
             )
+            let sshClient = try await SSHClient.connect(to: settings)
 
             self.client = sshClient
             self.sftpClient = try await sshClient.openSFTP()
@@ -109,9 +108,7 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let directory = try await sftp.openDirectory(atPath: path)
-            let entries = try await directory.listFiles()
-            try await directory.close()
+            let entries = try await sftp.listDirectory(atPath: path)
 
             return entries.compactMap { entry -> SFTPFile? in
                 let name = entry.filename
@@ -145,7 +142,7 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let attributes = try await sftp.getAttributes(atPath: path)
+            let attributes = try await sftp.getAttributes(at: path)
             let name: String
             if let lastSlash = path.lastIndex(of: "/") {
                 name = String(path[path.index(after: lastSlash)...])
@@ -176,8 +173,10 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let data = try await sftp.readFile(atPath: remotePath)
-            try data.write(to: URL(fileURLWithPath: localPath))
+            let data = try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+                try await file.readAll()
+            }
+            try Data(buffer: data).write(to: URL(fileURLWithPath: localPath))
         } catch {
             throw mapSFTPError(error, path: remotePath)
         }
@@ -188,7 +187,9 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            let buffer = try await sftp.readFile(atPath: remotePath)
+            let buffer = try await sftp.withFile(filePath: remotePath, flags: .read) { file in
+                try await file.readAll()
+            }
             return Data(buffer: buffer)
         } catch {
             throw mapSFTPError(error, path: remotePath)
@@ -200,7 +201,10 @@ public actor SFTPConnection {
         guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
         do {
-            try await sftp.writeFile(localData, toPath: remotePath)
+            try await sftp.withFile(filePath: remotePath, flags: [.write, .forceCreate]) { file in
+                var buffer = ByteBuffer(data: localData)
+                try await file.write(buffer, at: 0)
+            }
         } catch {
             throw mapSFTPError(error, path: remotePath)
         }
