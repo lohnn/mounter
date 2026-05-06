@@ -31,6 +31,7 @@ final class ConnectionStore: ObservableObject {
         connections.append(config)
         states[config.id] = .disconnected
         save()
+        LogStore.shared.log("Added connection: \(config.displayName)")
     }
 
     func remove(_ config: ConnectionConfig) {
@@ -39,6 +40,7 @@ final class ConnectionStore: ObservableObject {
         states.removeValue(forKey: config.id)
         KeychainHelper.delete(account: config.id.uuidString)
         save()
+        LogStore.shared.log("Removed connection: \(config.displayName)")
     }
 
     func update(_ config: ConnectionConfig) {
@@ -49,6 +51,7 @@ final class ConnectionStore: ObservableObject {
 
     func mount(_ config: ConnectionConfig) {
         states[config.id] = .connecting
+        LogStore.shared.log("Mounting \(config.displayName)...")
         let domain = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(rawValue: config.id.uuidString),
             displayName: config.displayName
@@ -56,9 +59,10 @@ final class ConnectionStore: ObservableObject {
         NSFileProviderManager.add(domain) { [weak self] error in
             Task { @MainActor in
                 if let error {
-                    print("Mount error: \(error.localizedDescription)")
+                    LogStore.shared.log("Mount failed for \(config.displayName): \(error.localizedDescription)", level: .error)
                     self?.states[config.id] = .error
                 } else {
+                    LogStore.shared.log("Mounted \(config.displayName) successfully")
                     self?.states[config.id] = .connected
                 }
             }
@@ -66,6 +70,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     func unmount(_ config: ConnectionConfig) {
+        LogStore.shared.log("Unmounting \(config.displayName)...")
         let domain = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(rawValue: config.id.uuidString),
             displayName: config.displayName
@@ -73,7 +78,7 @@ final class ConnectionStore: ObservableObject {
         NSFileProviderManager.remove(domain) { [weak self] error in
             Task { @MainActor in
                 if let error {
-                    print("Unmount error: \(error.localizedDescription)")
+                    LogStore.shared.log("Unmount error for \(config.displayName): \(error.localizedDescription)", level: .warning)
                 }
                 self?.states[config.id] = .disconnected
             }

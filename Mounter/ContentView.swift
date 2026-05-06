@@ -4,12 +4,19 @@ struct ContentView: View {
     @EnvironmentObject private var store: ConnectionStore
     @State private var selection: ConnectionConfig.ID?
     @State private var showingAddForm = false
+    @State private var showingLog = false
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
+        VSplitView {
+            NavigationSplitView {
+                sidebar
+            } detail: {
+                detail
+            }
+
+            if showingLog {
+                LogView()
+            }
         }
         .sheet(isPresented: $showingAddForm) {
             ConnectionFormView(mode: .add) { config in
@@ -47,6 +54,9 @@ struct ContentView: View {
                     Label("Remove", systemImage: "minus")
                 }
                 .disabled(selection == nil)
+                Button(action: { showingLog.toggle() }) {
+                    Label("Log", systemImage: "text.alignleft")
+                }
             }
         }
     }
