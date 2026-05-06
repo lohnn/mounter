@@ -35,6 +35,7 @@ public enum SFTPError: Error, LocalizedError {
 public actor SFTPConnection {
     private let config: ConnectionConfig
     private var process: Process?
+    private var childPid: pid_t = 0
     private var stdin: FileHandle?
     private var stdout: FileHandle?
     private var outputBuffer: String = ""
@@ -61,15 +62,10 @@ public actor SFTPConnection {
     }
 
     private func connectWithPassword(_ password: String?) async throws {
-        // Use a real PTY so sftp gets an interactive terminal and prompts for password
+        // Use forkpty to spawn sftp with a real PTY — this is the only reliable way
+        // to get SSH to prompt for a password in a non-terminal context.
         var primary: Int32 = 0
-        var secondary: Int32 = 0
         var winSize = winsize(ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0)
-
-        let result = openpty(&primary, &secondary, nil, nil, &winSize)
-        guard result == 0 else {
-            throw SFTPError.connectionFailed("Failed to allocate PTY")
-        }
 
         let args = [
             "/usr/bin/sftp",
@@ -84,30 +80,24 @@ public actor SFTPConnection {
             "\(config.username)@\(config.host)"
         ]
 
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
-        proc.arguments = Array(args.dropFirst()) // drop the executable path
+        let pid = forkpty(&primary, nil, nil, &winSize)
 
-        // Connect the secondary (child) side of the PTY to the process
-        let secondaryHandle = FileHandle(fileDescriptor: secondary, closeOnDealloc: false)
-        proc.standardInput = secondaryHandle
-        proc.standardOutput = secondaryHandle
-        proc.standardError = secondaryHandle
-
-        do {
-            try proc.run()
-        } catch {
-            close(primary)
-            close(secondary)
-            throw SFTPError.connectionFailed(error.localizedDescription)
+        if pid == -1 {
+            throw SFTPError.connectionFailed("forkpty failed: \(String(cString: strerror(errno)))")
         }
 
-        // Close the secondary side in the parent process
-        close(secondary)
+        if pid == 0 {
+            // Child process — exec sftp
+            let cArgs = args.map { strdup($0) } + [nil]
+            execv("/usr/bin/sftp", cArgs)
+            // If exec fails, exit child
+            _exit(1)
+        }
 
-        // Use the primary side for reading/writing
+        // Parent process — primary is our read/write fd to the child's PTY
         let primaryHandle = FileHandle(fileDescriptor: primary, closeOnDealloc: true)
-        self.process = proc
+        self.process = nil  // We don't have a Process object; track pid instead
+        self.childPid = pid
         self.stdin = primaryHandle
         self.stdout = primaryHandle
 
@@ -291,7 +281,7 @@ public actor SFTPConnection {
     // MARK: - Private
 
     private func execute(_ command: String) async throws -> String {
-        guard isConnected, process?.isRunning == true else {
+        guard isConnected, isChildRunning else {
             throw SFTPError.notConnected
         }
         sendRaw(command + "\n")
@@ -336,14 +326,36 @@ public actor SFTPConnection {
     private func cleanup() {
         isConnected = false
         stdin?.closeFile()
-        stdout?.closeFile()
+        // Only close stdout separately if it's a different handle than stdin
+        if stdout !== stdin {
+            stdout?.closeFile()
+        }
         if process?.isRunning == true {
             process?.terminate()
+        }
+        if childPid > 0 {
+            kill(childPid, SIGTERM)
+            var status: Int32 = 0
+            waitpid(childPid, &status, WNOHANG)
+            childPid = 0
         }
         process = nil
         stdin = nil
         stdout = nil
         outputBuffer = ""
+    }
+
+    private var isChildRunning: Bool {
+        if let proc = process {
+            return proc.isRunning
+        }
+        if childPid > 0 {
+            // Check if child is still alive
+            var status: Int32 = 0
+            let result = waitpid(childPid, &status, WNOHANG)
+            return result == 0 // 0 means child still running
+        }
+        return false
     }
 
     private func escapePath(_ path: String) -> String {
@@ -374,7 +386,7 @@ public actor SFTPConnection {
             }
 
             // If process died, bail
-            if process?.isRunning == false {
+            if !isChildRunning {
                 throw SFTPError.connectionFailed("sftp process exited before password prompt. Output: \(outputBuffer.prefix(200))")
             }
 
