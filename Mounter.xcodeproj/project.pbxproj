@@ -91,7 +91,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		B100000100000080 /* main group */ = {
+		B100000100000080 = {
 			isa = PBXGroup;
 			children = (
 				B100000100000081 /* Mounter */,
@@ -314,7 +314,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GDX32D6GB9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mounter/Info.plist;
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -336,7 +336,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GDX32D6GB9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mounter/Info.plist;
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -357,7 +357,7 @@
 				CODE_SIGN_ENTITLEMENTS = MounterFileProvider/MounterFileProvider.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GDX32D6GB9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -378,7 +378,7 @@
 				CODE_SIGN_ENTITLEMENTS = MounterFileProvider/MounterFileProvider.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = GDX32D6GB9;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -396,15 +396,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B100000100000092 /* Build configuration list for PBXProject "Mounter" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				B1000001000001A0 /* Debug */,
-				B1000001000001A1 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		B100000100000090 /* Build configuration list for PBXNativeTarget "Mounter" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -419,6 +410,15 @@
 			buildConfigurations = (
 				B1000001000001C0 /* Debug */,
 				B1000001000001C1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B100000100000092 /* Build configuration list for PBXProject "Mounter" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1000001000001A0 /* Debug */,
+				B1000001000001A1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
