@@ -58,11 +58,21 @@ final class ConnectionStore: ObservableObject {
         LogStore.shared.log("Mounting \(config.displayName)...")
 
         // Ensure the group container's File Provider Storage directory exists
+        // with permissions that allow fileproviderd to write to it
         if let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
         ) {
             let storageURL = groupURL.appendingPathComponent("File Provider Storage", isDirectory: true)
-            try? FileManager.default.createDirectory(at: storageURL, withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(
+                at: storageURL,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o755]
+            )
+            // Ensure parent also has adequate permissions
+            try? FileManager.default.setAttributes(
+                [.posixPermissions: 0o755],
+                ofItemAtPath: groupURL.path
+            )
         }
 
         let domain = NSFileProviderDomain(
