@@ -54,11 +54,10 @@ public actor SFTPConnection {
         let proc = Process()
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
 
         proc.standardInput = stdinPipe
         proc.standardOutput = stdoutPipe
-        proc.standardError = stderrPipe
+        proc.standardError = stdoutPipe  // Merge stderr into stdout to capture all prompts
 
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
 
@@ -67,8 +66,7 @@ public actor SFTPConnection {
         switch config.authMethod {
         case .password:
             // Use `script` to allocate a PTY so sftp sees a real terminal
-            // and prompts for password interactively. This works in App Sandbox
-            // unlike SSH_ASKPASS which requires writing executable scripts to disk.
+            // macOS `script` syntax: script -q /dev/null command [args...]
             needsPasswordAuth = true
             proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
             proc.arguments = [
@@ -79,6 +77,7 @@ public actor SFTPConnection {
                 "-P", "\(config.port)",
                 "\(config.username)@\(config.host)"
             ]
+            proc.environment = ProcessInfo.processInfo.environment
         case .sshKey:
             let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
             proc.arguments = [
@@ -106,8 +105,9 @@ public actor SFTPConnection {
             do {
                 try await waitForPasswordPrompt(timeout: Self.defaultTimeout)
             } catch {
+                let buffered = outputBuffer
                 cleanup()
-                throw SFTPError.connectionFailed("Never received password prompt from sftp. Process may have exited or timed out.")
+                throw SFTPError.connectionFailed("Never received password prompt. Output so far: \(buffered.prefix(300))")
             }
 
             guard let pw = password, !pw.isEmpty else {
