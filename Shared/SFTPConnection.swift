@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 // MARK: - Errors
 
@@ -51,48 +52,141 @@ public actor SFTPConnection {
     public func connect(password: String? = nil) async throws {
         guard !isConnected else { throw SFTPError.alreadyConnected }
 
+        switch config.authMethod {
+        case .password:
+            try await connectWithPassword(password)
+        case .sshKey:
+            try await connectWithKey()
+        }
+    }
+
+    private func connectWithPassword(_ password: String?) async throws {
+        // Use a real PTY so sftp gets an interactive terminal and prompts for password
+        var primary: Int32 = 0
+        var secondary: Int32 = 0
+        var winSize = winsize(ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0)
+
+        let result = openpty(&primary, &secondary, nil, nil, &winSize)
+        guard result == 0 else {
+            throw SFTPError.connectionFailed("Failed to allocate PTY")
+        }
+
+        let args = [
+            "/usr/bin/sftp",
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "UserKnownHostsFile=/dev/null",
+            "-o", "PubkeyAuthentication=no",
+            "-o", "PreferredAuthentications=password,keyboard-interactive",
+            "-o", "NumberOfPasswordPrompts=1",
+            "-o", "IdentitiesOnly=yes",
+            "-o", "IdentityFile=/dev/null",
+            "-P", "\(config.port)",
+            "\(config.username)@\(config.host)"
+        ]
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+        proc.arguments = Array(args.dropFirst()) // drop the executable path
+
+        // Connect the secondary (child) side of the PTY to the process
+        let secondaryHandle = FileHandle(fileDescriptor: secondary, closeOnDealloc: false)
+        proc.standardInput = secondaryHandle
+        proc.standardOutput = secondaryHandle
+        proc.standardError = secondaryHandle
+
+        do {
+            try proc.run()
+        } catch {
+            close(primary)
+            close(secondary)
+            throw SFTPError.connectionFailed(error.localizedDescription)
+        }
+
+        // Close the secondary side in the parent process
+        close(secondary)
+
+        // Use the primary side for reading/writing
+        let primaryHandle = FileHandle(fileDescriptor: primary, closeOnDealloc: true)
+        self.process = proc
+        self.stdin = primaryHandle
+        self.stdout = primaryHandle
+
+        // Wait for password prompt
+        print("[SFTPConnection] Waiting for password prompt...")
+        do {
+            try await waitForPasswordPrompt(timeout: Self.defaultTimeout)
+        } catch {
+            let buffered = outputBuffer
+            cleanup()
+            throw SFTPError.connectionFailed("Never received password prompt. Output so far: \(buffered.prefix(300))")
+        }
+
+        guard let pw = password, !pw.isEmpty else {
+            cleanup()
+            throw SFTPError.connectionFailed("Password auth requested but no password provided")
+        }
+
+        print("[SFTPConnection] Sending password...")
+        sendRaw(pw + "\n")
+
+        // Wait for sftp> prompt
+        print("[SFTPConnection] Waiting for sftp> prompt...")
+        do {
+            _ = try await readUntilPrompt()
+            isConnected = true
+            print("[SFTPConnection] Connected successfully.")
+        } catch {
+            let buffered = outputBuffer
+            cleanup()
+            if buffered.contains("Permission denied") || buffered.contains("Authentication failed") {
+                throw SFTPError.authenticationFailed
+            }
+            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(300))")
+        }
+    }
+
+    private func connectWithKey() async throws {
         let proc = Process()
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
 
         proc.standardInput = stdinPipe
         proc.standardOutput = stdoutPipe
-        proc.standardError = stdoutPipe  // Merge stderr into stdout to capture all prompts
+        proc.standardError = stdoutPipe
 
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+        let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
+        proc.arguments = [
+            "-o", "StrictHostKeyChecking=no",
+            "-o", "BatchMode=yes",
+            "-i", keyFile,
+            "-P", "\(config.port)",
+            "\(config.username)@\(config.host)"
+        ]
 
-        var needsPasswordAuth = false
-
-        switch config.authMethod {
-        case .password:
-            // Use `script` to allocate a PTY so sftp sees a real terminal
-            // macOS `script` syntax: script -q /dev/null command [args...]
-            needsPasswordAuth = true
-            proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
-            proc.arguments = [
-                "-q", "/dev/null",
-                "/usr/bin/sftp",
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
-                "-o", "PubkeyAuthentication=no",
-                "-o", "PreferredAuthentications=password,keyboard-interactive",
-                "-o", "NumberOfPasswordPrompts=1",
-                "-o", "IdentitiesOnly=yes",
-                "-o", "IdentityFile=/dev/null",
-                "-P", "\(config.port)",
-                "\(config.username)@\(config.host)"
-            ]
-            proc.environment = ProcessInfo.processInfo.environment
-        case .sshKey:
-            let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
-            proc.arguments = [
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "BatchMode=yes",
-                "-i", keyFile,
-                "-P", "\(config.port)",
-                "\(config.username)@\(config.host)"
-            ]
+        do {
+            try proc.run()
+        } catch {
+            throw SFTPError.connectionFailed(error.localizedDescription)
         }
+
+        self.process = proc
+        self.stdin = stdinPipe.fileHandleForWriting
+        self.stdout = stdoutPipe.fileHandleForReading
+
+        // Wait for initial sftp> prompt
+        do {
+            _ = try await readUntilPrompt()
+            isConnected = true
+        } catch {
+            let buffered = outputBuffer
+            cleanup()
+            if buffered.contains("Permission denied") {
+                throw SFTPError.authenticationFailed
+            }
+            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(300))")
+        }
+    }
 
         do {
             try proc.run()
