@@ -11,16 +11,15 @@ final class ConnectionStore: ObservableObject {
     @Published private(set) var connections: [ConnectionConfig] = []
     @Published private var states: [UUID: ConnectionState] = [:]
 
-    private static let appGroupIdentifier = "group.se.lohnn.mounter"
     private static let configsFileName = "connections.json"
 
     private let fileURL: URL
 
     init() {
-        let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
-        )!
-        self.fileURL = containerURL.appendingPathComponent(Self.configsFileName)
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = appSupport.appendingPathComponent("Mounter", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        self.fileURL = dir.appendingPathComponent(Self.configsFileName)
         load()
     }
 
@@ -55,16 +54,6 @@ final class ConnectionStore: ObservableObject {
     func mount(_ config: ConnectionConfig) {
         states[config.id] = .connecting
         LogStore.shared.log("Mounting \(config.displayName)...")
-
-        // Ensure the App Group container's File Provider Storage directory exists.
-        // fileproviderd expects this directory but may fail to create it if the
-        // group container hasn't been initialised yet.
-        if let groupURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
-        ) {
-            let storageURL = groupURL.appendingPathComponent("File Provider Storage", isDirectory: true)
-            try? FileManager.default.createDirectory(at: storageURL, withIntermediateDirectories: true)
-        }
 
         let domain = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(rawValue: config.id.uuidString),

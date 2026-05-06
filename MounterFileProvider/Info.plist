@@ -22,8 +22,6 @@
 	<string>1</string>
 	<key>NSExtension</key>
 	<dict>
-		<key>NSExtensionFileProviderDocumentGroup</key>
-		<string>group.se.lohnn.mounter</string>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.fileprovider-nonui</string>
 	</dict>
