@@ -188,52 +188,6 @@ public actor SFTPConnection {
         }
     }
 
-        do {
-            try proc.run()
-        } catch {
-            throw SFTPError.connectionFailed(error.localizedDescription)
-        }
-
-        self.process = proc
-        self.stdin = stdinPipe.fileHandleForWriting
-        self.stdout = stdoutPipe.fileHandleForReading
-
-        // If password auth, wait for "password:" prompt and send password
-        if needsPasswordAuth {
-            print("[SFTPConnection] Waiting for password prompt...")
-            do {
-                try await waitForPasswordPrompt(timeout: Self.defaultTimeout)
-            } catch {
-                let buffered = outputBuffer
-                cleanup()
-                throw SFTPError.connectionFailed("Never received password prompt. Output so far: \(buffered.prefix(300))")
-            }
-
-            guard let pw = password, !pw.isEmpty else {
-                cleanup()
-                throw SFTPError.connectionFailed("Password auth requested but no password provided")
-            }
-
-            print("[SFTPConnection] Sending password...")
-            sendRaw(pw + "\n")
-        }
-
-        // Wait for initial sftp> prompt
-        print("[SFTPConnection] Waiting for sftp> prompt...")
-        do {
-            _ = try await readUntilPrompt()
-            isConnected = true
-            print("[SFTPConnection] Connected successfully.")
-        } catch {
-            let buffered = outputBuffer
-            cleanup()
-            if buffered.contains("Permission denied") || buffered.contains("Authentication failed") {
-                throw SFTPError.authenticationFailed
-            }
-            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(200))")
-        }
-    }
-
     public func disconnect() {
         guard isConnected else { return }
         sendRaw("bye\n")
