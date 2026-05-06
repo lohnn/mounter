@@ -4,7 +4,10 @@ struct ContentView: View {
     @EnvironmentObject private var store: ConnectionStore
     @State private var selection: ConnectionConfig.ID?
     @State private var showingAddForm = false
+    @State private var showingEditForm = false
     @State private var showingLog = false
+    @State private var isTesting = false
+    @State private var testResult: String?
 
     var body: some View {
         VSplitView {
@@ -21,6 +24,16 @@ struct ContentView: View {
         .sheet(isPresented: $showingAddForm) {
             ConnectionFormView(mode: .add) { config in
                 store.add(config)
+            }
+        }
+        .sheet(isPresented: $showingEditForm) {
+            if let id = selection, let config = store.connections.first(where: { $0.id == id }) {
+                ConnectionFormView(mode: .edit(config)) { updated in
+                    store.update(updated)
+                    if updated.authMethod == .password {
+                        // Password is saved inside the form's save action
+                    }
+                }
             }
         }
     }
@@ -112,6 +125,20 @@ struct ContentView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(state == .connecting)
                 }
+                Button("Test") { testConnection(config) }
+                    .disabled(isTesting)
+                Button("Edit") { showingEditForm = true }
+            }
+
+            if isTesting {
+                ProgressView("Testing connection…")
+                    .controlSize(.small)
+            }
+            if let result = testResult {
+                Text(result)
+                    .font(.callout)
+                    .foregroundStyle(result.hasPrefix("✓") ? .green : .red)
+                    .textSelection(.enabled)
             }
 
             Spacer()
@@ -142,5 +169,15 @@ struct ContentView: View {
               let config = store.connections.first(where: { $0.id == id }) else { return }
         store.remove(config)
         selection = nil
+    }
+
+    private func testConnection(_ config: ConnectionConfig) {
+        isTesting = true
+        testResult = nil
+        Task {
+            let (success, message) = await store.testConnection(config)
+            isTesting = false
+            testResult = success ? "✓ \(message)" : message
+        }
     }
 }
