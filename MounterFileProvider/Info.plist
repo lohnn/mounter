@@ -8,6 +8,8 @@
 		<string>group.se.skandia.mounter</string>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.fileprovider-nonui</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).FileProviderExtension</string>
 	</dict>
 </dict>
 </plist>
