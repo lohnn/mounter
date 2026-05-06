@@ -9,6 +9,8 @@ struct ConnectionFormView: View {
 
     @Environment(\.dismiss) private var dismiss
 
+    @EnvironmentObject private var store: ConnectionStore
+
     @State private var displayName = ""
     @State private var host = ""
     @State private var port = 22
@@ -70,7 +72,7 @@ struct ConnectionFormView: View {
                         if let result = testResult {
                             Text(result)
                                 .font(.caption)
-                                .foregroundStyle(result.contains("Success") ? .green : .red)
+                                .foregroundStyle(result.hasPrefix("✓") ? .green : .red)
                         }
                     }
                 }
@@ -129,10 +131,30 @@ struct ConnectionFormView: View {
     private func testConnection() {
         isTesting = true
         testResult = nil
-        // Simulate a test — real implementation would attempt SSH handshake
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+
+        let config = ConnectionConfig(
+            displayName: displayName.isEmpty ? host : displayName,
+            host: host,
+            port: port,
+            username: username,
+            authMethod: authMethod,
+            keyPath: authMethod == .sshKey ? keyPath : nil
+        )
+
+        // Save password temporarily for the test if provided
+        if authMethod == .password && !password.isEmpty {
+            KeychainHelper.save(password: password, forAccount: config.id.uuidString)
+        }
+
+        Task {
+            let (success, message) = await store.testConnection(config)
             isTesting = false
-            testResult = host.isEmpty ? "Error: No host" : "Success"
+            testResult = success ? "✓ Success: \(message)" : message
+
+            // Clean up temp keychain entry if this was a new connection
+            if case .add = mode {
+                KeychainHelper.delete(account: config.id.uuidString)
+            }
         }
     }
 }

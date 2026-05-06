@@ -72,6 +72,25 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
+    func testConnection(_ config: ConnectionConfig) async -> (Bool, String) {
+        LogStore.shared.log("Testing connection to \(config.displayName)...")
+        let connection = SFTPConnection(config: config)
+        do {
+            let password = KeychainHelper.load(account: config.id.uuidString)
+            try await connection.connect(password: password)
+            let items = try await connection.listDirectory("/")
+            await connection.disconnect()
+            let message = "Connected, \(items.count) items in root"
+            LogStore.shared.log("Test succeeded for \(config.displayName): \(message)")
+            return (true, message)
+        } catch {
+            await connection.disconnect()
+            let message = error.localizedDescription
+            LogStore.shared.log("Test failed for \(config.displayName): \(message)", level: .error)
+            return (false, message)
+        }
+    }
+
     func unmount(_ config: ConnectionConfig) {
         LogStore.shared.log("Unmounting \(config.displayName)...")
         let domain = NSFileProviderDomain(
