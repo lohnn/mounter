@@ -75,7 +75,7 @@ public actor SFTPConnection {
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "NumberOfPasswordPrompts=1",
                 "-P", "\(config.port)",
-                config.sftpTarget
+                "\(config.username)@\(config.host)"
             ]
         case .sshKey:
             let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
@@ -84,7 +84,7 @@ public actor SFTPConnection {
                 "-o", "BatchMode=yes",
                 "-i", keyFile,
                 "-P", "\(config.port)",
-                config.sftpTarget
+                "\(config.username)@\(config.host)"
             ]
         }
 
