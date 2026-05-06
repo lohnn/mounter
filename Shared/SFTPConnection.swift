@@ -1,5 +1,6 @@
 import Foundation
 import Citadel
+import Crypto
 import NIOCore
 
 // MARK: - Errors
