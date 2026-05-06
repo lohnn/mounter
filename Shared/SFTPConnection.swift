@@ -73,7 +73,12 @@ public actor SFTPConnection {
                 "-q", "/dev/null",
                 "/usr/bin/sftp",
                 "-o", "StrictHostKeyChecking=no",
+                "-o", "UserKnownHostsFile=/dev/null",
+                "-o", "PubkeyAuthentication=no",
+                "-o", "PreferredAuthentications=password,keyboard-interactive",
                 "-o", "NumberOfPasswordPrompts=1",
+                "-o", "IdentitiesOnly=yes",
+                "-o", "IdentityFile=/dev/null",
                 "-P", "\(config.port)",
                 "\(config.username)@\(config.host)"
             ]
