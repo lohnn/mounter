@@ -57,6 +57,14 @@ final class ConnectionStore: ObservableObject {
         states[config.id] = .connecting
         LogStore.shared.log("Mounting \(config.displayName)...")
 
+        // Ensure the group container's File Provider Storage directory exists
+        if let groupURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
+        ) {
+            let storageURL = groupURL.appendingPathComponent("File Provider Storage", isDirectory: true)
+            try? FileManager.default.createDirectory(at: storageURL, withIntermediateDirectories: true)
+        }
+
         let domain = NSFileProviderDomain(
             identifier: NSFileProviderDomainIdentifier(rawValue: config.id.uuidString),
             displayName: config.displayName
