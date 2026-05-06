@@ -48,7 +48,7 @@ public actor SFTPConnection {
 
     // MARK: - Lifecycle
 
-    public func connect() async throws {
+    public func connect(password: String? = nil) async throws {
         guard !isConnected else { throw SFTPError.alreadyConnected }
 
         let proc = Process()
@@ -60,28 +60,29 @@ public actor SFTPConnection {
         proc.standardOutput = stdoutPipe
         proc.standardError = stderrPipe
 
-        switch config.auth {
-        case .password(let password):
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+
+        switch config.authMethod {
+        case .password:
             // Use SSH_ASKPASS trick for non-interactive password auth
-            let askpassScript = createAskpassScript(password: password)
+            let askpassScript = createAskpassScript(password: password ?? "")
             proc.environment = [
                 "SSH_ASKPASS": askpassScript,
                 "SSH_ASKPASS_REQUIRE": "force",
                 "DISPLAY": ":0"
             ]
-            proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
             proc.arguments = [
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "NumberOfPasswordPrompts=1",
                 "-P", "\(config.port)",
                 config.sftpTarget
             ]
-        case .key(let path, _):
-            proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
+        case .sshKey:
+            let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
             proc.arguments = [
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "BatchMode=yes",
-                "-i", path,
+                "-i", keyFile,
                 "-P", "\(config.port)",
                 config.sftpTarget
             ]

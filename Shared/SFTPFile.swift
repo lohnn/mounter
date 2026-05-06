@@ -25,7 +25,7 @@ public struct SFTPFile: Sendable, Equatable {
         guard !line.isEmpty else { return nil }
 
         // ls -la fields: permissions, links, owner, group, size, month, day, time/year, name
-        let components = line.split(maxSplits: 8, omittingEmptySubsequences: true).map(String.init)
+        let components = line.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: true).map(String.init)
         guard components.count >= 9 else { return nil }
 
         let permissions = components[0]
