@@ -77,6 +77,12 @@ final class ConnectionStore: ObservableObject {
                 } else {
                     LogStore.shared.log("Mounted \(config.displayName) successfully")
                     self?.states[config.id] = .connected
+
+                    // Signal the enumerator to kick off initial sync
+                    if let manager = NSFileProviderManager(for: domain) {
+                        try? await manager.signalEnumerator(for: .workingSet)
+                        try? await manager.signalEnumerator(for: .rootContainer)
+                    }
                 }
             }
         }
