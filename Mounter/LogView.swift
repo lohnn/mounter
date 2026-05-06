@@ -25,6 +25,7 @@ struct LogView: View {
                         Text(entry.message)
                             .font(.caption.monospaced())
                             .foregroundStyle(color(for: entry.level))
+                            .textSelection(.enabled)
                     }
                     .id(entry.id)
                 }
