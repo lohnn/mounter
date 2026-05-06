@@ -47,7 +47,7 @@ public actor SFTPConnection {
     // MARK: - Lifecycle
 
     public func connect(password: String? = nil) async throws {
-        guard !isConnected else { throw SFTPError.alreadyConnected }
+        guard !isConnected else { return }
 
         do {
             let authMethod: @Sendable () -> SSHAuthenticationMethod
@@ -101,6 +101,12 @@ public actor SFTPConnection {
     }
 
     // MARK: - Operations
+
+    /// Ensures the connection is established; connects if not already.
+    public func ensureConnected() async throws {
+        guard !isConnected else { return }
+        try await connect()
+    }
 
     /// List contents of a remote directory.
     public func listDirectory(_ path: String) async throws -> [SFTPFile] {

@@ -18,12 +18,13 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     func enumerateItems(for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
         Task {
             do {
+                try await connection.ensureConnected()
                 let files = try await connection.listDirectory(path)
                 let items = files.map { FileProviderItem(file: $0) }
                 observer.didEnumerate(items)
                 observer.finishEnumerating(upTo: nil)
             } catch {
-                observer.finishEnumeratingWithError(error)
+                observer.finishEnumeratingWithError(NSFileProviderError(.serverUnreachable))
             }
         }
     }
