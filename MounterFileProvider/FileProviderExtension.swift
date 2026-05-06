@@ -42,7 +42,8 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
             throw NSFileProviderError(.notAuthenticated)
         }
         let conn = SFTPConnection(config: config)
-        try await conn.connect()
+        let password = KeychainHelper.load(account: config.id.uuidString)
+        try await conn.connect(password: password)
         self.connection = conn
         return conn
     }
@@ -243,16 +244,15 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
         }
 
         guard let conn = connection else {
-            // Lazily connect if needed — create connection synchronously for enumerator,
-            // actual operations are async inside the enumerator.
+            // Lazily connect if needed
             guard let config else {
                 throw NSFileProviderError(.notAuthenticated)
             }
             let conn = SFTPConnection(config: config)
             self.connection = conn
-            // Kick off connection asynchronously; enumerator will wait on first use.
-            Task { try await conn.connect() }
-            return FileProviderEnumerator(path: path, connection: conn)
+            let password = KeychainHelper.load(account: config.id.uuidString)
+            Task { try await conn.connect(password: password) }
+            return FileProviderEnumerator(path: path, connection: conn, password: password)
         }
 
         return FileProviderEnumerator(path: path, connection: conn)

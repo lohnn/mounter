@@ -10,6 +10,10 @@
 	<array>
 		<string>group.se.skandia.mounter</string>
 	</array>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)group.se.skandia.mounter</string>
+	</array>
 	<key>com.apple.developer.fileprovider.testing-mode</key>
 	<true/>
 </dict>

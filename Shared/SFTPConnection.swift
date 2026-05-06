@@ -103,9 +103,9 @@ public actor SFTPConnection {
     // MARK: - Operations
 
     /// Ensures the connection is established; connects if not already.
-    public func ensureConnected() async throws {
+    public func ensureConnected(password: String? = nil) async throws {
         guard !isConnected else { return }
-        try await connect()
+        try await connect(password: password)
     }
 
     /// List contents of a remote directory.

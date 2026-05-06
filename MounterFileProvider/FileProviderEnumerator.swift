@@ -5,10 +5,12 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
 
     private let path: String
     private let connection: SFTPConnection
+    private let password: String?
 
-    init(path: String, connection: SFTPConnection) {
+    init(path: String, connection: SFTPConnection, password: String? = nil) {
         self.path = path
         self.connection = connection
+        self.password = password
     }
 
     func invalidate() {
@@ -18,7 +20,7 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     func enumerateItems(for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
         Task {
             do {
-                try await connection.ensureConnected()
+                try await connection.ensureConnected(password: password)
                 let files = try await connection.listDirectory(path)
                 let items = files.map { FileProviderItem(file: $0) }
                 observer.didEnumerate(items)
@@ -30,7 +32,6 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     }
 
     func enumerateChanges(for observer: NSFileProviderChangeObserver, from anchor: NSFileProviderSyncAnchor) {
-        // For now, report no incremental changes — the system will fall back to full enumeration.
         observer.finishEnumeratingChanges(upTo: currentAnchor, moreComing: false)
     }
 

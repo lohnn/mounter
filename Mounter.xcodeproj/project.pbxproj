@@ -21,6 +21,7 @@
 		B100000100000023 /* ConnectionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B0 /* ConnectionConfig.swift */; };
 		B100000100000024 /* SFTPConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B1 /* SFTPConnection.swift */; };
 		B100000100000025 /* SFTPFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B2 /* SFTPFile.swift */; };
+		B100000100000026 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A4 /* KeychainHelper.swift */; };
 		B100000100000030 /* FileProvider.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1000001000000D0 /* FileProvider.framework */; };
 		B100000100000031 /* FileProvider.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1000001000000D0 /* FileProvider.framework */; };
 		B100000100000032 /* MounterFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1000001000000E1 /* MounterFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -59,7 +60,7 @@
 		B1000001000000A1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B1000001000000A2 /* ConnectionFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFormView.swift; sourceTree = "<group>"; };
 		B1000001000000A3 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
-		B1000001000000A4 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
+		B1000001000000A4 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeychainHelper.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
 		B1000001000000A5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000001000000A6 /* Mounter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mounter.entitlements; sourceTree = "<group>"; };
 		B1000001000000A7 /* LogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStore.swift; sourceTree = "<group>"; };
@@ -117,7 +118,6 @@
 				B1000001000000A1 /* ContentView.swift */,
 				B1000001000000A2 /* ConnectionFormView.swift */,
 				B1000001000000A3 /* ConnectionStore.swift */,
-				B1000001000000A4 /* KeychainHelper.swift */,
 				B1000001000000A7 /* LogStore.swift */,
 				B1000001000000A8 /* LogView.swift */,
 				B1000001000000A5 /* Info.plist */,
@@ -144,6 +144,7 @@
 				B1000001000000B0 /* ConnectionConfig.swift */,
 				B1000001000000B1 /* SFTPConnection.swift */,
 				B1000001000000B2 /* SFTPFile.swift */,
+				B1000001000000A4 /* KeychainHelper.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -276,6 +277,7 @@
 				B100000100000023 /* ConnectionConfig.swift in Sources */,
 				B100000100000024 /* SFTPConnection.swift in Sources */,
 				B100000100000025 /* SFTPFile.swift in Sources */,
+				B100000100000026 /* KeychainHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

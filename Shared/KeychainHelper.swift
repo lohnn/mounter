@@ -3,6 +3,7 @@ import Security
 
 enum KeychainHelper {
     private static let service = "com.mounter.sftp"
+    private static let accessGroup = "54KM939NR7.group.se.skandia.mounter"
 
     @discardableResult
     static func save(password: String, forAccount account: String) -> Bool {
@@ -13,6 +14,7 @@ enum KeychainHelper {
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecValueData as String:   data
         ]
         let status = SecItemAdd(query as CFDictionary, nil)
@@ -24,6 +26,7 @@ enum KeychainHelper {
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup,
             kSecReturnData as String:  true,
             kSecMatchLimit as String:  kSecMatchLimitOne
         ]
@@ -38,7 +41,8 @@ enum KeychainHelper {
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: account
+            kSecAttrAccount as String: account,
+            kSecAttrAccessGroup as String: accessGroup
         ]
         let status = SecItemDelete(query as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
