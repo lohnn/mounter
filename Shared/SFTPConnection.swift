@@ -1,5 +1,5 @@
 import Foundation
-import Darwin
+import Citadel
 
 // MARK: - Errors
 
@@ -31,18 +31,12 @@ public enum SFTPError: Error, LocalizedError {
 
 // MARK: - Connection
 
-/// Manages a persistent sftp subprocess for file operations.
+/// Manages an SSH/SFTP connection using Citadel (pure Swift, built on SwiftNIO).
 public actor SFTPConnection {
     private let config: ConnectionConfig
-    private var process: Process?
-    private var childPid: pid_t = 0
-    private var stdin: FileHandle?
-    private var stdout: FileHandle?
-    private var outputBuffer: String = ""
+    private var client: SSHClient?
+    private var sftpClient: SFTPClient?
     private var isConnected: Bool = false
-
-    private static let prompt = "sftp>"
-    private static let defaultTimeout: TimeInterval = 30
 
     public init(config: ConnectionConfig) {
         self.config = config
@@ -53,139 +47,58 @@ public actor SFTPConnection {
     public func connect(password: String? = nil) async throws {
         guard !isConnected else { throw SFTPError.alreadyConnected }
 
-        switch config.authMethod {
-        case .password:
-            try await connectWithPassword(password)
-        case .sshKey:
-            try await connectWithKey()
-        }
-    }
-
-    private func connectWithPassword(_ password: String?) async throws {
-        // Use forkpty to spawn sftp with a real PTY — this is the only reliable way
-        // to get SSH to prompt for a password in a non-terminal context.
-        var primary: Int32 = 0
-        var winSize = winsize(ws_row: 24, ws_col: 80, ws_xpixel: 0, ws_ypixel: 0)
-
-        let args = [
-            "/usr/bin/sftp",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "PubkeyAuthentication=no",
-            "-o", "PreferredAuthentications=password,keyboard-interactive",
-            "-o", "NumberOfPasswordPrompts=1",
-            "-o", "IdentitiesOnly=yes",
-            "-o", "IdentityFile=/dev/null",
-            "-P", "\(config.port)",
-            "\(config.username)@\(config.host)"
-        ]
-
-        let pid = forkpty(&primary, nil, nil, &winSize)
-
-        if pid == -1 {
-            throw SFTPError.connectionFailed("forkpty failed: \(String(cString: strerror(errno)))")
-        }
-
-        if pid == 0 {
-            // Child process — exec sftp
-            let cArgs = args.map { strdup($0) } + [nil]
-            execv("/usr/bin/sftp", cArgs)
-            // If exec fails, exit child
-            _exit(1)
-        }
-
-        // Parent process — primary is our read/write fd to the child's PTY
-        let primaryHandle = FileHandle(fileDescriptor: primary, closeOnDealloc: true)
-        self.process = nil  // We don't have a Process object; track pid instead
-        self.childPid = pid
-        self.stdin = primaryHandle
-        self.stdout = primaryHandle
-
-        // Wait for password prompt
-        print("[SFTPConnection] Waiting for password prompt...")
         do {
-            try await waitForPasswordPrompt(timeout: Self.defaultTimeout)
+            let authMethod: SSHAuthenticationMethod
+
+            switch config.authMethod {
+            case .password:
+                guard let pw = password, !pw.isEmpty else {
+                    throw SFTPError.connectionFailed("Password auth requested but no password provided")
+                }
+                authMethod = .passwordBased(username: config.username, password: pw)
+
+            case .sshKey:
+                let keyPath = config.keyPath ?? "~/.ssh/id_rsa"
+                let expandedPath = NSString(string: keyPath).expandingTildeInPath
+                let keyData = try Data(contentsOf: URL(fileURLWithPath: expandedPath))
+                let privateKey = String(data: keyData, encoding: .utf8) ?? ""
+                authMethod = .privateKey(
+                    username: config.username,
+                    privateKey: .init(sshRsa: privateKey)
+                )
+            }
+
+            let sshClient = try await SSHClient.connect(
+                host: config.host,
+                port: config.port,
+                authenticationMethod: authMethod,
+                hostKeyValidator: .acceptAnything()
+            )
+
+            self.client = sshClient
+            self.sftpClient = try await sshClient.openSFTP()
+            self.isConnected = true
+        } catch let error as SFTPError {
+            throw error
         } catch {
-            let buffered = outputBuffer
-            cleanup()
-            throw SFTPError.connectionFailed("Never received password prompt. Output so far: \(buffered.prefix(300))")
-        }
-
-        guard let pw = password, !pw.isEmpty else {
-            cleanup()
-            throw SFTPError.connectionFailed("Password auth requested but no password provided")
-        }
-
-        print("[SFTPConnection] Sending password...")
-        sendRaw(pw + "\n")
-
-        // Wait for sftp> prompt
-        print("[SFTPConnection] Waiting for sftp> prompt...")
-        do {
-            _ = try await readUntilPrompt()
-            isConnected = true
-            print("[SFTPConnection] Connected successfully.")
-        } catch {
-            let buffered = outputBuffer
-            cleanup()
-            if buffered.contains("Permission denied") || buffered.contains("Authentication failed") {
+            let message = error.localizedDescription
+            if message.contains("Authentication") || message.contains("auth") {
                 throw SFTPError.authenticationFailed
             }
-            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(300))")
+            throw SFTPError.connectionFailed(message)
         }
     }
 
-    private func connectWithKey() async throws {
-        let proc = Process()
-        let stdinPipe = Pipe()
-        let stdoutPipe = Pipe()
-
-        proc.standardInput = stdinPipe
-        proc.standardOutput = stdoutPipe
-        proc.standardError = stdoutPipe
-
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
-        let keyFile = config.keyPath ?? "~/.ssh/id_rsa"
-        proc.arguments = [
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "BatchMode=yes",
-            "-i", keyFile,
-            "-P", "\(config.port)",
-            "\(config.username)@\(config.host)"
-        ]
-
-        do {
-            try proc.run()
-        } catch {
-            throw SFTPError.connectionFailed(error.localizedDescription)
-        }
-
-        self.process = proc
-        self.stdin = stdinPipe.fileHandleForWriting
-        self.stdout = stdoutPipe.fileHandleForReading
-
-        // Wait for initial sftp> prompt
-        do {
-            _ = try await readUntilPrompt()
-            isConnected = true
-        } catch {
-            let buffered = outputBuffer
-            cleanup()
-            if buffered.contains("Permission denied") {
-                throw SFTPError.authenticationFailed
-            }
-            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(300))")
-        }
-    }
-
-    public func disconnect() {
+    public func disconnect() async {
         guard isConnected else { return }
-        sendRaw("bye\n")
-        cleanup()
+        try? await client?.close()
+        client = nil
+        sftpClient = nil
+        isConnected = false
     }
 
     public func reconnect() async throws {
-        disconnect()
+        await disconnect()
         try await connect()
     }
 
@@ -193,206 +106,183 @@ public actor SFTPConnection {
 
     /// List contents of a remote directory.
     public func listDirectory(_ path: String) async throws -> [SFTPFile] {
-        let output = try await execute("ls -la \(escapePath(path))")
-        let lines = output.components(separatedBy: .newlines)
-        return lines.compactMap { SFTPFile.parse(line: $0, parentPath: path) }
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            let directory = try await sftp.openDirectory(atPath: path)
+            let entries = try await directory.listFiles()
+            try await directory.close()
+
+            return entries.compactMap { entry -> SFTPFile? in
+                let name = entry.filename
+                guard name != "." && name != ".." else { return nil }
+
+                let isDir = entry.attributes.type == .directory
+                let size = entry.attributes.size ?? 0
+                let modDate: Date? = entry.attributes.modificationDate
+                let perms = entry.attributes.permissions.map { formatPermissions($0, isDirectory: isDir) } ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
+
+                let fullPath = path.hasSuffix("/")
+                    ? path + name
+                    : path + "/" + name
+
+                return SFTPFile(
+                    name: name,
+                    path: fullPath,
+                    size: size,
+                    isDirectory: isDir,
+                    modificationDate: modDate,
+                    permissions: perms
+                )
+            }
+        } catch {
+            throw mapSFTPError(error, path: path)
+        }
     }
 
     /// Get file metadata.
     public func stat(_ path: String) async throws -> SFTPFile {
-        // Use ls -la on the parent directory and find the entry
-        let parentPath: String
-        let fileName: String
-        if let lastSlash = path.lastIndex(of: "/") {
-            parentPath = String(path[path.startIndex...lastSlash])
-            fileName = String(path[path.index(after: lastSlash)...])
-        } else {
-            parentPath = "."
-            fileName = path
-        }
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
 
-        let entries = try await listDirectory(parentPath)
-        guard let entry = entries.first(where: { $0.name == fileName }) else {
-            throw SFTPError.fileNotFound(path)
+        do {
+            let attributes = try await sftp.getAttributes(atPath: path)
+            let name: String
+            if let lastSlash = path.lastIndex(of: "/") {
+                name = String(path[path.index(after: lastSlash)...])
+            } else {
+                name = path
+            }
+
+            let isDir = attributes.type == .directory
+            let size = attributes.size ?? 0
+            let modDate: Date? = attributes.modificationDate
+            let perms = attributes.permissions.map { formatPermissions($0, isDirectory: isDir) } ?? (isDir ? "drwxr-xr-x" : "-rw-r--r--")
+
+            return SFTPFile(
+                name: name,
+                path: path,
+                size: size,
+                isDirectory: isDir,
+                modificationDate: modDate,
+                permissions: perms
+            )
+        } catch {
+            throw mapSFTPError(error, path: path)
         }
-        return entry
     }
 
-    /// Read a remote file, returning its contents.
+    /// Download a remote file to a local path.
     public func readFile(_ remotePath: String, to localPath: String) async throws {
-        let output = try await execute("get \(escapePath(remotePath)) \(escapePath(localPath))")
-        if output.contains("not found") || output.contains("No such file") {
-            throw SFTPError.fileNotFound(remotePath)
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            let data = try await sftp.readFile(atPath: remotePath)
+            try data.write(to: URL(fileURLWithPath: localPath))
+        } catch {
+            throw mapSFTPError(error, path: remotePath)
         }
-        if output.contains("Permission denied") {
-            throw SFTPError.permissionDenied(remotePath)
+    }
+
+    /// Download a remote file returning its data.
+    public func downloadFile(remotePath: String) async throws -> Data {
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            let buffer = try await sftp.readFile(atPath: remotePath)
+            return Data(buffer: buffer)
+        } catch {
+            throw mapSFTPError(error, path: remotePath)
+        }
+    }
+
+    /// Upload data to a remote path.
+    public func uploadFile(localData: Data, remotePath: String) async throws {
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            try await sftp.writeFile(localData, toPath: remotePath)
+        } catch {
+            throw mapSFTPError(error, path: remotePath)
         }
     }
 
     /// Write a local file to the remote server.
     public func writeFile(from localPath: String, to remotePath: String) async throws {
-        let output = try await execute("put \(escapePath(localPath)) \(escapePath(remotePath))")
-        if output.contains("Permission denied") {
-            throw SFTPError.permissionDenied(remotePath)
-        }
+        let data = try Data(contentsOf: URL(fileURLWithPath: localPath))
+        try await uploadFile(localData: data, remotePath: remotePath)
     }
 
     /// Create a remote directory.
     public func mkdir(_ path: String) async throws {
-        let output = try await execute("mkdir \(escapePath(path))")
-        if output.contains("Permission denied") {
-            throw SFTPError.permissionDenied(path)
-        }
-        if output.contains("Failure") {
-            throw SFTPError.commandFailed("mkdir failed: \(output)")
+        try await createDirectory(at: path)
+    }
+
+    /// Create a remote directory.
+    public func createDirectory(at path: String) async throws {
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            try await sftp.createDirectory(atPath: path)
+        } catch {
+            throw mapSFTPError(error, path: path)
         }
     }
 
     /// Remove a remote file or directory.
     public func remove(_ path: String) async throws {
-        // Try rm first (file), then rmdir (directory)
-        let output = try await execute("rm \(escapePath(path))")
-        if output.contains("not a regular file") || output.contains("Is a directory") {
-            let rmdirOutput = try await execute("rmdir \(escapePath(path))")
-            if rmdirOutput.contains("Failure") || rmdirOutput.contains("not empty") {
-                throw SFTPError.commandFailed("remove failed: \(rmdirOutput)")
+        try await deleteItem(at: path, isDirectory: false)
+    }
+
+    /// Delete a remote item.
+    public func deleteItem(at path: String, isDirectory: Bool) async throws {
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            if isDirectory {
+                try await sftp.removeDirectory(atPath: path)
+            } else {
+                try await sftp.removeFile(atPath: path)
             }
-        } else if output.contains("No such file") || output.contains("not found") {
-            throw SFTPError.fileNotFound(path)
-        } else if output.contains("Permission denied") {
-            throw SFTPError.permissionDenied(path)
+        } catch {
+            throw mapSFTPError(error, path: path)
         }
     }
 
     /// Rename/move a remote file or directory.
     public func rename(from oldPath: String, to newPath: String) async throws {
-        let output = try await execute("rename \(escapePath(oldPath)) \(escapePath(newPath))")
-        if output.contains("No such file") || output.contains("not found") {
-            throw SFTPError.fileNotFound(oldPath)
-        }
-        if output.contains("Permission denied") {
-            throw SFTPError.permissionDenied(oldPath)
-        }
-        if output.contains("Failure") {
-            throw SFTPError.commandFailed("rename failed: \(output)")
+        try await moveItem(from: oldPath, to: newPath)
+    }
+
+    /// Move/rename a remote item.
+    public func moveItem(from oldPath: String, to newPath: String) async throws {
+        guard let sftp = sftpClient else { throw SFTPError.notConnected }
+
+        do {
+            try await sftp.rename(oldPath: oldPath, newPath: newPath)
+        } catch {
+            throw mapSFTPError(error, path: oldPath)
         }
     }
 
-    // MARK: - Private
+    // MARK: - Private Helpers
 
-    private func execute(_ command: String) async throws -> String {
-        guard isConnected, isChildRunning else {
-            throw SFTPError.notConnected
+    private func mapSFTPError(_ error: Error, path: String) -> SFTPError {
+        let message = String(describing: error)
+        if message.contains("No such file") || message.contains("not found") || message.contains("doesNotExist") {
+            return .fileNotFound(path)
         }
-        sendRaw(command + "\n")
-        return try await readUntilPrompt()
+        if message.contains("Permission denied") || message.contains("permissionDenied") {
+            return .permissionDenied(path)
+        }
+        return .commandFailed(message)
     }
 
-    private func sendRaw(_ text: String) {
-        guard let data = text.data(using: .utf8) else { return }
-        stdin?.write(data)
-    }
-
-    private func readUntilPrompt(timeout: TimeInterval = defaultTimeout) async throws -> String {
-        let deadline = Date().addingTimeInterval(timeout)
-
-        while Date() < deadline {
-            if let data = stdout?.availableData, !data.isEmpty {
-                if let chunk = String(data: data, encoding: .utf8) {
-                    outputBuffer += chunk
-                }
-            }
-
-            if let promptRange = outputBuffer.range(of: Self.prompt) {
-                let result = String(outputBuffer[outputBuffer.startIndex..<promptRange.lowerBound])
-                outputBuffer = String(outputBuffer[promptRange.upperBound...])
-                    .trimmingCharacters(in: .whitespaces)
-                return result.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-
-            // Check for error indicators before prompt
-            if outputBuffer.contains("Permission denied") && !process!.isRunning {
-                let msg = outputBuffer
-                outputBuffer = ""
-                throw SFTPError.authenticationFailed
-            }
-
-            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        }
-
-        throw SFTPError.timeout
-    }
-
-    private func cleanup() {
-        isConnected = false
-        stdin?.closeFile()
-        // Only close stdout separately if it's a different handle than stdin
-        if stdout !== stdin {
-            stdout?.closeFile()
-        }
-        if process?.isRunning == true {
-            process?.terminate()
-        }
-        if childPid > 0 {
-            kill(childPid, SIGTERM)
-            var status: Int32 = 0
-            waitpid(childPid, &status, WNOHANG)
-            childPid = 0
-        }
-        process = nil
-        stdin = nil
-        stdout = nil
-        outputBuffer = ""
-    }
-
-    private var isChildRunning: Bool {
-        if let proc = process {
-            return proc.isRunning
-        }
-        if childPid > 0 {
-            // Check if child is still alive
-            var status: Int32 = 0
-            let result = waitpid(childPid, &status, WNOHANG)
-            return result == 0 // 0 means child still running
-        }
-        return false
-    }
-
-    private func escapePath(_ path: String) -> String {
-        // Wrap in quotes, escaping internal quotes
-        let escaped = path.replacingOccurrences(of: "\"", with: "\\\"")
-        return "\"\(escaped)\""
-    }
-
-    private func waitForPasswordPrompt(timeout: TimeInterval) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-
-        while Date() < deadline {
-            if let data = stdout?.availableData, !data.isEmpty {
-                if let chunk = String(data: data, encoding: .utf8) {
-                    outputBuffer += chunk
-                }
-            }
-
-            // Look for common password prompt patterns
-            let lower = outputBuffer.lowercased()
-            if lower.contains("password:") || lower.contains("password: ") {
-                // Clear the buffer up to and including the prompt
-                // (we don't want the password prompt leaking into command output)
-                if let range = outputBuffer.range(of: "assword:", options: .caseInsensitive) {
-                    outputBuffer = String(outputBuffer[range.upperBound...])
-                }
-                return
-            }
-
-            // If process died, bail
-            if !isChildRunning {
-                throw SFTPError.connectionFailed("sftp process exited before password prompt. Output: \(outputBuffer.prefix(200))")
-            }
-
-            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
-        }
-
-        throw SFTPError.timeout
+    private func formatPermissions(_ permissions: UInt32, isDirectory: Bool) -> String {
+        let typeChar: Character = isDirectory ? "d" : "-"
+        let rwx = ["---", "--x", "-w-", "-wx", "r--", "r-x", "rw-", "rwx"]
+        let owner = rwx[Int((permissions >> 6) & 0o7)]
+        let group = rwx[Int((permissions >> 3) & 0o7)]
+        let other = rwx[Int(permissions & 0o7)]
+        return "\(typeChar)\(owner)\(group)\(other)"
     }
 }

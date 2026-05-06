@@ -3,6 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>com.apple.security.app-sandbox</key>
-	<false/>
+	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.se.skandia.mounter</string>
+	</array>
 </dict>
 </plist>

@@ -8,6 +8,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private var connection: SFTPConnection?
     private var config: ConnectionConfig?
 
+    private static let appGroupIdentifier = "group.se.skandia.mounter"
     private static let configsFileName = "connections.json"
 
     required init(domain: NSFileProviderDomain) {
@@ -19,9 +20,11 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     // MARK: - Configuration
 
     private func loadConfig() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let fileURL = appSupport.appendingPathComponent("Mounter/\(Self.configsFileName)")
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
+        ) else { return }
 
+        let fileURL = containerURL.appendingPathComponent(Self.configsFileName)
         guard let data = try? Data(contentsOf: fileURL),
               let configs = try? JSONDecoder().decode([ConnectionConfig].self, from: data) else {
             return

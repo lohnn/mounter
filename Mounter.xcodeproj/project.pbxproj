@@ -26,6 +26,8 @@
 		B100000100000032 /* MounterFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1000001000000E1 /* MounterFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B100000100000040A /* LogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A7 /* LogStore.swift */; };
 		B100000100000040B /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A8 /* LogView.swift */; };
+		B100000100000033 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = B1000001000002A1 /* Citadel */; };
+		B100000100000034 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = B1000001000002A2 /* Citadel */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +83,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B100000100000030 /* FileProvider.framework in Frameworks */,
+				B100000100000033 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +92,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B100000100000031 /* FileProvider.framework in Frameworks */,
+				B100000100000034 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -178,6 +182,9 @@
 				B100000100000041 /* PBXTargetDependency */,
 			);
 			name = Mounter;
+			packageProductDependencies = (
+				B1000001000002A1 /* Citadel */,
+			);
 			productName = Mounter;
 			productReference = B1000001000000E0 /* Mounter.app */;
 			productType = "com.apple.product-type.application";
@@ -194,6 +201,9 @@
 			dependencies = (
 			);
 			name = MounterFileProvider;
+			packageProductDependencies = (
+				B1000001000002A2 /* Citadel */,
+			);
 			productName = MounterFileProvider;
 			productReference = B1000001000000E1 /* MounterFileProvider.appex */;
 			productType = "com.apple.product-type.app-extension";
@@ -225,6 +235,9 @@
 				Base,
 			);
 			mainGroup = B100000100000080;
+			packageReferences = (
+				B1000001000002A0 /* XCRemoteSwiftPackageReference "Citadel" */,
+			);
 			productRefGroup = B100000100000085 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -434,6 +447,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B1000001000002A0 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B1000001000002A1 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1000001000002A0 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+		B1000001000002A2 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1000001000002A0 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B1000001000000F0 /* Project object */;
 }

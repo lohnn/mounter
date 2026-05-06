@@ -11,15 +11,17 @@ final class ConnectionStore: ObservableObject {
     @Published private(set) var connections: [ConnectionConfig] = []
     @Published private var states: [UUID: ConnectionState] = [:]
 
+    private static let appGroupIdentifier = "group.se.skandia.mounter"
     private static let configsFileName = "connections.json"
 
     private let fileURL: URL
 
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Mounter", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        self.fileURL = dir.appendingPathComponent(Self.configsFileName)
+        let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier
+        )!
+        try? FileManager.default.createDirectory(at: containerURL, withIntermediateDirectories: true)
+        self.fileURL = containerURL.appendingPathComponent(Self.configsFileName)
         load()
     }
 
