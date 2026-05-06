@@ -62,16 +62,18 @@ public actor SFTPConnection {
 
         proc.executableURL = URL(fileURLWithPath: "/usr/bin/sftp")
 
+        var needsPasswordAuth = false
+
         switch config.authMethod {
         case .password:
-            // Use SSH_ASKPASS trick for non-interactive password auth
-            let askpassScript = createAskpassScript(password: password ?? "")
-            proc.environment = [
-                "SSH_ASKPASS": askpassScript,
-                "SSH_ASKPASS_REQUIRE": "force",
-                "DISPLAY": ":0"
-            ]
+            // Use `script` to allocate a PTY so sftp sees a real terminal
+            // and prompts for password interactively. This works in App Sandbox
+            // unlike SSH_ASKPASS which requires writing executable scripts to disk.
+            needsPasswordAuth = true
+            proc.executableURL = URL(fileURLWithPath: "/usr/bin/script")
             proc.arguments = [
+                "-q", "/dev/null",
+                "/usr/bin/sftp",
                 "-o", "StrictHostKeyChecking=no",
                 "-o", "NumberOfPasswordPrompts=1",
                 "-P", "\(config.port)",
@@ -98,13 +100,38 @@ public actor SFTPConnection {
         self.stdin = stdinPipe.fileHandleForWriting
         self.stdout = stdoutPipe.fileHandleForReading
 
-        // Wait for initial prompt
+        // If password auth, wait for "password:" prompt and send password
+        if needsPasswordAuth {
+            print("[SFTPConnection] Waiting for password prompt...")
+            do {
+                try await waitForPasswordPrompt(timeout: Self.defaultTimeout)
+            } catch {
+                cleanup()
+                throw SFTPError.connectionFailed("Never received password prompt from sftp. Process may have exited or timed out.")
+            }
+
+            guard let pw = password, !pw.isEmpty else {
+                cleanup()
+                throw SFTPError.connectionFailed("Password auth requested but no password provided")
+            }
+
+            print("[SFTPConnection] Sending password...")
+            sendRaw(pw + "\n")
+        }
+
+        // Wait for initial sftp> prompt
+        print("[SFTPConnection] Waiting for sftp> prompt...")
         do {
             _ = try await readUntilPrompt()
             isConnected = true
+            print("[SFTPConnection] Connected successfully.")
         } catch {
+            let buffered = outputBuffer
             cleanup()
-            throw SFTPError.authenticationFailed
+            if buffered.contains("Permission denied") || buffered.contains("Authentication failed") {
+                throw SFTPError.authenticationFailed
+            }
+            throw SFTPError.connectionFailed("Failed waiting for sftp> prompt. Output so far: \(buffered.prefix(200))")
         }
     }
 
@@ -272,12 +299,35 @@ public actor SFTPConnection {
         return "\"\(escaped)\""
     }
 
-    private func createAskpassScript(password: String) -> String {
-        let dir = NSTemporaryDirectory()
-        let scriptPath = (dir as NSString).appendingPathComponent("sftp_askpass_\(UUID().uuidString).sh")
-        let escaped = password.replacingOccurrences(of: "'", with: "'\\''")
-        let content = "#!/bin/sh\necho '\(escaped)'\n"
-        FileManager.default.createFile(atPath: scriptPath, contents: content.data(using: .utf8), attributes: [.posixPermissions: 0o700])
-        return scriptPath
+    private func waitForPasswordPrompt(timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
+            if let data = stdout?.availableData, !data.isEmpty {
+                if let chunk = String(data: data, encoding: .utf8) {
+                    outputBuffer += chunk
+                }
+            }
+
+            // Look for common password prompt patterns
+            let lower = outputBuffer.lowercased()
+            if lower.contains("password:") || lower.contains("password: ") {
+                // Clear the buffer up to and including the prompt
+                // (we don't want the password prompt leaking into command output)
+                if let range = outputBuffer.range(of: "assword:", options: .caseInsensitive) {
+                    outputBuffer = String(outputBuffer[range.upperBound...])
+                }
+                return
+            }
+
+            // If process died, bail
+            if process?.isRunning == false {
+                throw SFTPError.connectionFailed("sftp process exited before password prompt. Output: \(outputBuffer.prefix(200))")
+            }
+
+            try await Task.sleep(nanoseconds: 50_000_000) // 50ms
+        }
+
+        throw SFTPError.timeout
     }
 }
