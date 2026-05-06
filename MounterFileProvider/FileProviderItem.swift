@@ -69,6 +69,11 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
         file.modificationDate
     }
 
+    var itemVersion: NSFileProviderItemVersion {
+        let contentVersion = Data("\(file.size)_\(file.modificationDate?.timeIntervalSince1970 ?? 0)".utf8)
+        return NSFileProviderItemVersion(contentVersion: contentVersion, metadataVersion: contentVersion)
+    }
+
     // MARK: - Identifier Helpers
 
     static func identifier(forPath path: String) -> NSFileProviderItemIdentifier {
