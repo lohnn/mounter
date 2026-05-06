@@ -12,8 +12,6 @@
 		B10000010000000C /* ConnectionFormView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A2 /* ConnectionFormView.swift */; };
 		B10000010000000D /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A3 /* ConnectionStore.swift */; };
 		B10000010000000E /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A4 /* KeychainHelper.swift */; };
-		B100000100000040A /* LogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A7 /* LogStore.swift */; };
-		B100000100000040B /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A8 /* LogView.swift */; };
 		B10000010000000F /* ConnectionConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B0 /* ConnectionConfig.swift */; };
 		B100000100000010 /* SFTPConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B1 /* SFTPConnection.swift */; };
 		B100000100000011 /* SFTPFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000B2 /* SFTPFile.swift */; };
@@ -26,6 +24,8 @@
 		B100000100000030 /* FileProvider.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1000001000000D0 /* FileProvider.framework */; };
 		B100000100000031 /* FileProvider.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1000001000000D0 /* FileProvider.framework */; };
 		B100000100000032 /* MounterFileProvider.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1000001000000E1 /* MounterFileProvider.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B100000100000040A /* LogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A7 /* LogStore.swift */; };
+		B100000100000040B /* LogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000A8 /* LogView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,10 +58,10 @@
 		B1000001000000A2 /* ConnectionFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFormView.swift; sourceTree = "<group>"; };
 		B1000001000000A3 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
 		B1000001000000A4 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainHelper.swift; sourceTree = "<group>"; };
-		B1000001000000A7 /* LogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStore.swift; sourceTree = "<group>"; };
-		B1000001000000A8 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		B1000001000000A5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B1000001000000A6 /* Mounter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Mounter.entitlements; sourceTree = "<group>"; };
+		B1000001000000A7 /* LogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogStore.swift; sourceTree = "<group>"; };
+		B1000001000000A8 /* LogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogView.swift; sourceTree = "<group>"; };
 		B1000001000000B0 /* ConnectionConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionConfig.swift; sourceTree = "<group>"; };
 		B1000001000000B1 /* SFTPConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPConnection.swift; sourceTree = "<group>"; };
 		B1000001000000B2 /* SFTPFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SFTPFile.swift; sourceTree = "<group>"; };
@@ -322,7 +322,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = GDX32D6GB9;
+				DEVELOPMENT_TEAM = 54KM939NR7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mounter/Info.plist;
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -331,7 +331,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.lohnn.mounter;
+				PRODUCT_BUNDLE_IDENTIFIER = se.skandia.mounter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -344,7 +344,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = GDX32D6GB9;
+				DEVELOPMENT_TEAM = 54KM939NR7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Mounter/Info.plist;
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
@@ -353,7 +353,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.lohnn.mounter;
+				PRODUCT_BUNDLE_IDENTIFIER = se.skandia.mounter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 			};
@@ -365,15 +365,16 @@
 				CODE_SIGN_ENTITLEMENTS = MounterFileProvider/MounterFileProvider.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = GDX32D6GB9;
+				DEVELOPMENT_TEAM = 54KM939NR7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MounterFileProvider;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.lohnn.mounter.fileprovider;
+				PRODUCT_BUNDLE_IDENTIFIER = se.skandia.mounter.fileprovider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
@@ -386,15 +387,16 @@
 				CODE_SIGN_ENTITLEMENTS = MounterFileProvider/MounterFileProvider.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = GDX32D6GB9;
+				DEVELOPMENT_TEAM = 54KM939NR7;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MounterFileProvider/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = MounterFileProvider;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@executable_path/../../../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = se.lohnn.mounter.fileprovider;
+				PRODUCT_BUNDLE_IDENTIFIER = se.skandia.mounter.fileprovider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 5.0;
