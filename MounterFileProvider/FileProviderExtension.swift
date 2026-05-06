@@ -8,7 +8,7 @@ final class FileProviderExtension: NSObject, NSFileProviderReplicatedExtension {
     private var connection: SFTPConnection?
     private var config: ConnectionConfig?
 
-    private static let appGroupIdentifier = "group.com.mounter.shared"
+    private static let appGroupIdentifier = "group.se.lohnn.mounter"
     private static let configsFileName = "connections.json"
 
     required init(domain: NSFileProviderDomain) {
